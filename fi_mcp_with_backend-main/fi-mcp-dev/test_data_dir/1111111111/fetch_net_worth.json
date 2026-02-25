@@ -1,0 +1,15 @@
+{
+  "netWorthResponse": {
+    "assetValues": [
+      {
+        "netWorthAttribute": "ASSET_TYPE_MUTUAL_FUND",
+        "value": { "currencyCode": "INR", "units": "50000" }
+      }
+    ],
+    "liabilityValues": [],
+    "totalNetWorthValue": {
+      "currencyCode": "INR",
+      "units": "50000"
+    }
+  }
+}
