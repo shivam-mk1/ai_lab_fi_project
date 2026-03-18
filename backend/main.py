@@ -21,25 +21,49 @@ from vertexai.generative_models import GenerativeModel, Tool, Part, FunctionDecl
 app = FastAPI()
 
 # --- Initializations ---
-FIREBASE_KEY_PATH = os.path.join(os.path.dirname(__file__), os.getenv("FIREBASE_SERVICE_ACCOUNT"))
+IS_RENDER = os.getenv("RENDER") == "true" or os.path.exists("/etc/secrets")
+
+# --- Firebase Initialization ---
+if IS_RENDER:
+    FIREBASE_KEY_PATH = "/etc/secrets/firebase-service-account.json"
+else:
+    FIREBASE_KEY_PATH = os.path.join(
+        os.path.dirname(__file__),
+        os.getenv("FIREBASE_SERVICE_ACCOUNT")
+    )
+
 if not os.path.exists(FIREBASE_KEY_PATH):
-    raise FileNotFoundError(f"Firebase Service Account key not found at {FIREBASE_KEY_PATH}")
+    raise FileNotFoundError(f"Firebase key not found at {FIREBASE_KEY_PATH}")
 
 cred = credentials.Certificate(FIREBASE_KEY_PATH)
 firebase_admin.initialize_app(cred)
 
-VERTEX_AI_KEY_PATH = os.path.join(os.path.dirname(__file__), os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+
+# --- Vertex AI Initialization ---
+if IS_RENDER:
+    VERTEX_AI_KEY_PATH = "/etc/secrets/vertex-ai-key.json"
+else:
+    VERTEX_AI_KEY_PATH = os.path.join(
+        os.path.dirname(__file__),
+        os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    )
+
 if not os.path.exists(VERTEX_AI_KEY_PATH):
-    raise FileNotFoundError(f"Vertex AI Service Account key not found at {VERTEX_AI_KEY_PATH}")
+    raise FileNotFoundError(f"Vertex AI key not found at {VERTEX_AI_KEY_PATH}")
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = VERTEX_AI_KEY_PATH
+
+
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 
 print(f"Initializing Vertex AI with project: {GCP_PROJECT_ID}, location: {GCP_LOCATION}")
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
 
-MOCK_SERVER_BASE_URL = os.getenv("MCP_SERVER_BASE_URL", "http://10.0.2.2:8080")
+if IS_RENDER:
+    MOCK_SERVER_BASE_URL = os.getenv("MCP_SERVER_BASE_URL")
+else:
+    MOCK_SERVER_BASE_URL = os.getenv("MCP_SERVER_BASE_URL", "http://localhost:8080")
 
 # --- Authentication ---
 async def verify_firebase_token(authorization: str = Header(...)):
