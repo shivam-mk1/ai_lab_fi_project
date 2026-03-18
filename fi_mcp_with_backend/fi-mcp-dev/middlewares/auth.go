@@ -70,5 +70,5 @@ func (m *AuthMiddleware) AuthMiddleware(next server.ToolHandlerFunc) server.Tool
 }
 
 func (m *AuthMiddleware) getLoginUrl(sessionId string) string {
-	return fmt.Sprintf("http://localhost:%s/mockWebPage?sessionId=%s", pkg.GetPort(), sessionId)
+	return fmt.Sprintf("https://fi-mcp-server.onrender.com/mockWebPage?sessionId=%s", sessionId)
 }

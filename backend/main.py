@@ -63,7 +63,7 @@ vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
 if IS_RENDER:
     MOCK_SERVER_BASE_URL = os.getenv("MCP_SERVER_BASE_URL")
 else:
-    MOCK_SERVER_BASE_URL = os.getenv("MCP_SERVER_BASE_URL", "http://localhost:8080")
+    MOCK_SERVER_BASE_URL = os.getenv("MCP_SERVER_BASE_URL", "https://fi-mcp-server.onrender.com")
 
 # --- Authentication ---
 async def verify_firebase_token(authorization: str = Header(...)):
