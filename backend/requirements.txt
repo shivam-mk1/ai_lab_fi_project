@@ -8,3 +8,4 @@ pydantic
 pyjwt
 cryptography
 python-dotenv
+google-cloud-aiplatform
