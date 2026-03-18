@@ -330,7 +330,7 @@ class NotificationService {
       final idToken = await user?.getIdToken();
 
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8000/send-notification'),
+        Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/send-notification'),
         headers: {
           'Authorization': 'Bearer $idToken',
           'Content-Type': 'application/json',

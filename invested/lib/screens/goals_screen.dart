@@ -41,7 +41,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
       try {
         final response = await http
             .get(
-              Uri.parse('http://10.0.2.2:8000/get-goals'),
+              Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/get-goals'),
               headers: {
                 'Authorization': 'Bearer $idToken',
                 'Content-Type': 'application/json',
@@ -96,7 +96,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
       try {
         final response = await http
             .post(
-              Uri.parse('http://10.0.2.2:8000/analyze-goals'),
+              Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/analyze-goals'),
               headers: {
                 'Authorization': 'Bearer $idToken',
                 'Content-Type': 'application/json',
@@ -156,7 +156,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
     try {
       final response = await http
           .delete(
-            Uri.parse('http://10.0.2.2:8000/delete-goal/$goalId'),
+            Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/delete-goal/$goalId'),
             headers: {
               'Authorization': 'Bearer $idToken',
               'Content-Type': 'application/json',

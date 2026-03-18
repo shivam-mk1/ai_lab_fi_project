@@ -32,7 +32,7 @@ class _GuardianAlertsScreenState extends State<GuardianAlertsScreen> {
     try {
       final response = await http
           .post(
-            Uri.parse('http://10.0.2.2:8000/run-guardian'),
+            Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/run-guardian'),
             headers: {
               'Authorization': 'Bearer $idToken',
               'Content-Type': 'application/json',

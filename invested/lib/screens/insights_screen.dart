@@ -53,7 +53,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
     try {
       final response = await http
           .get(
-            Uri.parse('http://10.0.2.2:8000/get-user-data'),
+            Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/get-user-data'),
             headers: {
               'Authorization': 'Bearer $idToken',
               'Content-Type': 'application/json',

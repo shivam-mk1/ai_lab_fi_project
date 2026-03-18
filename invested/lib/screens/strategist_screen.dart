@@ -25,7 +25,7 @@ class _StrategistScreenState extends State<StrategistScreen> {
     try {
       final response = await http
           .post(
-            Uri.parse('http://10.0.2.2:8000/run-strategist'),
+            Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/run-strategist'),
             headers: {
               'Authorization': 'Bearer $idToken',
               'Content-Type': 'application/json',

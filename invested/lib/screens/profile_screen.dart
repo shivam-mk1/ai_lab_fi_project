@@ -20,7 +20,7 @@ class ProfileScreen extends StatelessWidget {
     );
     try {
       final response = await http.get(
-        Uri.parse('http://10.0.2.2:8000/start-fi-auth'),
+        Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/start-fi-auth'),
         headers: {'Authorization': 'Bearer $idToken'},
       );
       if (!context.mounted) return;
@@ -28,11 +28,21 @@ class ProfileScreen extends StatelessWidget {
       if (response.statusCode == 200) {
         final authUrl = json.decode(response.body)['auth_url'];
         final uri = Uri.parse(authUrl);
-        if (await canLaunchUrl(uri)) {
+        print("Successfully got auth URL: $authUrl");
+
+        // canLaunchUrl famously fails on Android 11+ without explicit AndroidManifest queries.
+        // It is totally safe to just call launchUrl directly for http/https.
+        try {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (e) {
+          print("Could not launch URL: $e");
         }
+      } else {
+        print("Backend returned error status code: ${response.statusCode}");
+        print("Response body: ${response.body}");
       }
     } catch (e) {
+      print("Error in connectToFi: $e");
       if (!context.mounted) return;
       Navigator.pop(context);
     }
@@ -102,14 +112,6 @@ class ProfileScreen extends StatelessWidget {
 
           const SizedBox(height: 30),
 
-          const Text(
-            "Settings",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Colors.green,
-            ),
-          ),
           const Divider(thickness: 1.2),
 
           const SizedBox(height: 12),
