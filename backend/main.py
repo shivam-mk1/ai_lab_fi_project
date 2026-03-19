@@ -2,10 +2,9 @@ from fastapi import FastAPI, Depends, HTTPException, Header, Body
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 import os
+import json
 import uuid
 import httpx
-import json
-from fastapi.responses import JSONResponse
 import traceback
 import asyncio
 from datetime import datetime, timedelta
@@ -14,9 +13,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Import Vertex AI and Tool Use libraries
-import vertexai
-from vertexai.generative_models import GenerativeModel, Tool, Part, FunctionDeclaration
+# Import Google Generative AI
+import google.generativeai as genai
 from contextlib import asynccontextmanager
 
 # --- Configuration Helpers ---
@@ -101,36 +99,17 @@ def get_db():
         print(f"⚠️ Firestore access error: {e}")
         return None
 
-# --- Vertex AI Setup & Lifespan ---
-VERTEX_AI_READY = False
-try:
-    if GCP_PROJECT_ID:
-        print(f"Initializing Vertex AI with project: {GCP_PROJECT_ID}, location: {GCP_LOCATION}")
-        vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION)
-except Exception as e:
-    print(f"⚠️ VERTEX AI INIT ERROR: Failed to configure Vertex AI. Error: {e}")
+# --- Gemini Setup ---
+if os.getenv("GEMINI_API_KEY"):
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    VERTEX_AI_READY = True
+else:
+    print("⚠️ WARNING: GEMINI_API_KEY is not set. Gemini API calls will fail.")
+    VERTEX_AI_READY = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global VERTEX_AI_READY
-    # Test Vertex billing/API access safely
-    try:
-        if GCP_PROJECT_ID:
-            print("⏳ Validating Vertex AI Connectivity & Billing...")
-            test_model = GenerativeModel("gemini-2.5-flash")
-            response = await asyncio.to_thread(test_model.generate_content, "Ping.")
-            if response and response.text:
-                VERTEX_AI_READY = True
-                print("✅ Vertex AI Billing and API validated successfully.")
-    except Exception as e:
-        error_msg = str(e)
-        if "BILLING_DISABLED" in error_msg:
-            print(f"❌ FATAL ERROR: Google Cloud Billing is DISABLED for project {GCP_PROJECT_ID}.")
-        elif "PERMISSION_DENIED" in error_msg or "PermissionDenied" in error_msg:
-            print(f"❌ FATAL ERROR: Missing API Permissions or API disabled: {error_msg}")
-        else:
-            print(f"❌ FATAL VERTEX AI ERROR: {error_msg}")
-        VERTEX_AI_READY = False
+    # Dummy lifespan since we removed vertexai.init
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -293,7 +272,8 @@ async def get_user_data(uid: str = Depends(verify_firebase_token)):
         return error_fallback_data
 
 # --- Tool Definition for the Strategist Agent ---
-def get_market_performance(stock_symbols: list):
+def get_market_performance(stock_symbols: list[str]) -> str:
+    """Gets the real-time 1-year market performance for a list of stock symbols and the NIFTY 50 index."""
     print(f"⚙️ TOOL CALLED: get_market_performance for symbols: {stock_symbols}")
     performance_data = {"NIFTY 50": {"1y_return": 12.0}}
     for symbol in stock_symbols:
@@ -305,53 +285,49 @@ def get_market_performance(stock_symbols: list):
             performance_data[symbol] = {"1y_return": 13.0}
     return json.dumps(performance_data)
 
-market_data_tool = Tool(
-    function_declarations=[
-        FunctionDeclaration(
-            name="get_market_performance",
-            description="Gets the real-time 1-year market performance for a list of stock symbols and the NIFTY 50 index.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "stock_symbols": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "A list of stock symbols to fetch performance for, e.g., ['RELIANCE', 'TCS']"
-                    }
-                },
-                "required": ["stock_symbols"]
-            },
-        )
-    ]
-)
+market_data_tool = get_market_performance
 
 # --- Gemini Model Call Function ---
-def call_gemini_text(prompt: str, model_name="gemini-2.5-flash", tools=None, timeout=45):
+def call_gemini_text(prompt: str, model_name="gemini-3-flash-preview", tools=None, timeout=45):
     if not VERTEX_AI_READY:
-        print("⚠️ Gemini Call Aborted: Vertex AI is offline (Billing/API Issue).")
+        print("⚠️ Gemini Call Aborted: No GEMINI_API_KEY provided.")
         return "ERROR_VERTEX_UNAVAILABLE"
 
     try:
-        model = GenerativeModel(model_name, tools=tools)
+        if tools:
+            # When using tools with google.generativeai, pass the function directly
+            model = genai.GenerativeModel(model_name, tools=[tools] if callable(tools) else tools)
+        else:
+            model = genai.GenerativeModel(model_name)
+            
         response = model.generate_content(prompt)
-        if response.candidates and response.candidates[0].function_calls:
-            function_call = response.candidates[0].function_calls[0]
-            if function_call.name == "get_market_performance":
-                args = {key: value for key, value in function_call.args.items()}
-                tool_result = get_market_performance(**args)
-                final_response = model.generate_content(
-                    Part.from_function_response(
-                        name="get_market_performance",
-                        response={"content": tool_result}
-                    )
-                )
-                return final_response.text
+        
+        # Check if function was called
+        if response.candidates and response.candidates[0].content.parts:
+            part = response.candidates[0].content.parts[0]
+            if hasattr(part, 'function_call') and part.function_call:
+                fc = part.function_call
+                if fc.name == "get_market_performance":
+                    # Parse args
+                    args = {k: type(v)(v) for k, v in fc.args.items()} if hasattr(fc.args, 'items') else {"stock_symbols": list(fc.args["stock_symbols"])}
+                    tool_result = get_market_performance(**args)
+                    
+                    messages = [
+                        {'role': 'user', 'parts': [prompt]},
+                        response.candidates[0].content,
+                        {'role': 'user', 'parts': [{
+                            'function_response': {
+                                'name': 'get_market_performance',
+                                'response': {'content': tool_result}
+                            }
+                        }]}
+                    ]
+                    final_response = model.generate_content(messages)
+                    return final_response.text
         return response.text
     except Exception as e:
         error_msg = str(e)
         print(f"❌ Gemini Calling Error: {error_msg}")
-        if "BILLING_DISABLED" in error_msg:
-             print("❌ FATAL: Google Cloud Billing Disabled during runtime!")
         traceback.print_exc()
         return "ERROR_GEMINI_CRASH"
 
