@@ -19,7 +19,7 @@ class ProfileScreen extends StatelessWidget {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      final response = await http.get(
+      final response = await http.get(                                                                                           
         Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/start-fi-auth'),
         headers: {'Authorization': 'Bearer $idToken'},
       );

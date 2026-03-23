@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Import Google Generative AI
-import google.generativeai as genai
+# Import Groq SDK
+from groq import Groq
 from contextlib import asynccontextmanager
 
 # --- Configuration Helpers ---
@@ -33,19 +33,19 @@ IS_RENDER = os.getenv("RENDER") == "true" or os.path.exists("/etc/secrets")
 FALLBACK_GUARDIAN = {
     "alerts": [
         {"type": "Security Alert", "description": "Ensure your banking passwords are secure.", "severity": "info"},
-        {"type": "AI Degraded", "description": "Dynamic analysis is offline due to Vertex AI billing restrictions.", "severity": "warning"}
+        {"type": "AI Degraded", "description": "Dynamic analysis is offline due to an AI processing error (e.g., API limits or invalid key).", "severity": "warning"}
     ]
 }
 
 FALLBACK_CATALYST = {
     "opportunities": [
         {"title": "Explore Mutual Funds", "description": "Consider starting an SIP in NIFTY 50 index funds.", "category": "Growth"},
-        {"title": "AI Degraded", "description": "Growth insights are limited today. Vertex AI Billing is disabled.", "category": "System"}
+        {"title": "AI Degraded", "description": "Growth insights are limited today due to an AI processing error.", "category": "System"}
     ]
 }
 
 FALLBACK_STRATEGIST = {
-    "summary": "Core insights degraded due to AI billing limitations.",
+    "summary": "Core insights degraded due to an AI processing error.",
     "recommendations": [
         {"symbol": "NIFTY 50", "advice": "Diversify", "reasoning": "Consider index funds for lower risk."},
     ]
@@ -99,13 +99,14 @@ def get_db():
         print(f"⚠️ Firestore access error: {e}")
         return None
 
-# --- Gemini Setup ---
-if os.getenv("GEMINI_API_KEY"):
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    VERTEX_AI_READY = True
+# --- AI Setup ---
+groq_client = None
+if os.getenv("GROQ_API_KEY"):
+    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    AI_READY = True
 else:
-    print("⚠️ WARNING: GEMINI_API_KEY is not set. Gemini API calls will fail.")
-    VERTEX_AI_READY = False
+    print("⚠️ WARNING: GROQ_API_KEY is not set. AI API calls will fail.")
+    AI_READY = False
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -285,49 +286,85 @@ def get_market_performance(stock_symbols: list[str]) -> str:
             performance_data[symbol] = {"1y_return": 13.0}
     return json.dumps(performance_data)
 
-market_data_tool = get_market_performance
+market_data_tool = {
+    "type": "function",
+    "function": {
+        "name": "get_market_performance",
+        "description": "Gets the real-time 1-year market performance for a list of stock symbols and the NIFTY 50 index.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "stock_symbols": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "A list of stock symbols to fetch performance for, e.g., ['RELIANCE', 'TCS']"
+                }
+            },
+            "required": ["stock_symbols"]
+        }
+    }
+}
 
-# --- Gemini Model Call Function ---
-def call_gemini_text(prompt: str, model_name="gemini-3-flash-preview", tools=None, timeout=45):
-    if not VERTEX_AI_READY:
-        print("⚠️ Gemini Call Aborted: No GEMINI_API_KEY provided.")
-        return "ERROR_VERTEX_UNAVAILABLE"
+# --- AI Model Call Function ---
+def call_gemini_text(prompt: str, model_name="llama-3.3-70b-versatile", tools=None, timeout=45):
+    if not AI_READY:
+        print("⚠️ AI Call Aborted: No GROQ_API_KEY provided.")
+        return "ERROR_AI_UNAVAILABLE"
 
     try:
-        if tools:
-            # When using tools with google.generativeai, pass the function directly
-            model = genai.GenerativeModel(model_name, tools=[tools] if callable(tools) else tools)
-        else:
-            model = genai.GenerativeModel(model_name)
-            
-        response = model.generate_content(prompt)
+        messages = [{"role": "user", "content": prompt}]
+        
+        # Format tools if provided
+        groq_tools = [tools] if (isinstance(tools, dict) and "type" in tools) else tools if tools else None
+        
+        response = groq_client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            tools=groq_tools,
+            tool_choice="auto" if groq_tools else "none"
+        )
+        
+        response_message = response.choices[0].message
         
         # Check if function was called
-        if response.candidates and response.candidates[0].content.parts:
-            part = response.candidates[0].content.parts[0]
-            if hasattr(part, 'function_call') and part.function_call:
-                fc = part.function_call
-                if fc.name == "get_market_performance":
-                    # Parse args
-                    args = {k: type(v)(v) for k, v in fc.args.items()} if hasattr(fc.args, 'items') else {"stock_symbols": list(fc.args["stock_symbols"])}
-                    tool_result = get_market_performance(**args)
-                    
-                    messages = [
-                        {'role': 'user', 'parts': [prompt]},
-                        response.candidates[0].content,
-                        {'role': 'user', 'parts': [{
-                            'function_response': {
-                                'name': 'get_market_performance',
-                                'response': {'content': tool_result}
-                            }
-                        }]}
-                    ]
-                    final_response = model.generate_content(messages)
-                    return final_response.text
-        return response.text
+        if response_message.tool_calls:
+            tool_call = response_message.tool_calls[0]
+            if tool_call.function.name == "get_market_performance":
+                # Parse args
+                args = json.loads(tool_call.function.arguments)
+                tool_result = get_market_performance(**args)
+                
+                # Append tool call message
+                messages.append({
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_call.function.name,
+                            "arguments": tool_call.function.arguments
+                        }
+                    }]
+                })
+                
+                # Append tool response message
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": "get_market_performance",
+                    "content": tool_result
+                })
+                
+                final_response = groq_client.chat.completions.create(
+                    model=model_name,
+                    messages=messages
+                )
+                return final_response.choices[0].message.content
+        return response_message.content
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ Gemini Calling Error: {error_msg}")
+        print(f"❌ AI Calling Error: {error_msg}")
         traceback.print_exc()
         return "ERROR_GEMINI_CRASH"
 
@@ -364,7 +401,7 @@ async def ask_oracle(uid: str = Depends(verify_firebase_token), body: dict = Bod
         if answer.startswith("ERROR_"):
             return {
                 "question": question, 
-                "answer": "I am currently undergoing maintenance and AI services are temporarily degraded due to API Billing limits. Please try again later!",
+                "answer": "I am currently undergoing maintenance and AI services are temporarily degraded due to an error (e.g., API limits, invalid key, or system crash). Please try again later!",
                 "is_fallback": True
             }
         return {"question": question, "answer": answer}

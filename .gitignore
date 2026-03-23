@@ -168,3 +168,5 @@ backend/vertex-ai-key.json
 **/app.*.map.json 
 
 webapp
+
+backend/test_local.py
