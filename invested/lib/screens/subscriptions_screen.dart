@@ -42,7 +42,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
       // Make API call to backend
       final response = await http.get(
-        Uri.parse('https://ai-lab-fi-project-nu2v.onrender.com/get-subscriptions'),
+        Uri.parse(
+          'https://ai-lab-fi-project-nu2v.onrender.com/get-subscriptions',
+        ),
         headers: {
           'Authorization': 'Bearer $idToken',
           'Content-Type': 'application/json',
@@ -99,7 +101,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         throw Exception('Failed to load subscriptions: ${response.statusCode}');
       }
     } catch (e) {
-       setState(() {
+      setState(() {
         error = e.toString();
         isLoading = false;
       });
@@ -497,19 +499,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
-            onPressed: () {
-              // TODO: Add new subscription functionality
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Add subscription feature coming soon!'),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: fetchSubscriptions,

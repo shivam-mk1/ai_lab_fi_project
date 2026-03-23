@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class OracleChatScreen extends StatefulWidget {
   const OracleChatScreen({super.key});
@@ -192,9 +193,14 @@ class _OracleChatScreenState extends State<OracleChatScreen> {
                               ),
                             ],
                           ),
-                          child: SelectableText(
-                            msg['text'] ?? '',
-                            style: const TextStyle(fontSize: 15),
+                          child: MarkdownBody(
+                            data: msg['text'] ?? '',
+                            selectable: true,
+                            styleSheet: MarkdownStyleSheet(
+                              p: const TextStyle(fontSize: 15),
+                              strong: const TextStyle(fontWeight: FontWeight.bold),
+                              listBullet: const TextStyle(fontSize: 16),
+                            ),
                           ),
                         ),
                       ),
