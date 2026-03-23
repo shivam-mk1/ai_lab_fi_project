@@ -155,7 +155,7 @@ async def health():
     return {
         "status": "ok", 
         "firestore_status": "online" if FIRESTORE_READY else "offline",
-        "vertex_status": "online" if VERTEX_AI_READY else "offline"
+        "ai_status": "online" if AI_READY else "offline"
     }
 
 # --- Helper: Extract valid data from MCP response ---
