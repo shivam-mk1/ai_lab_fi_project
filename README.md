@@ -88,4 +88,3 @@ flutter run
 If the MCP Mock Server is offline or experiences a timeout, the FastAPI backend will instantly default to an embedded set of "dummy" fallback data (e.g. 1.5 Million INR Net Worth, 790 Credit Score). This ensures the AI agents and dashboard *always* have mock data to respond with, eliminating `unavailable` crashes and delivering a seamless demo experience.
 
 ---
-Made by team Hacktic :)
